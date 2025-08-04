@@ -1,10 +1,16 @@
 package com.example.backend.controller;
 
 import com.example.backend.entity.Order;
+import com.example.backend.entity.User;
 import com.example.backend.repository.OrderRepository;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import com.example.backend.repository.UserRepository;
+import com.example.backend.controller.ApiResponse; // Assuming you have this response wrapper
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
@@ -13,14 +19,36 @@ import java.util.List;
 public class OrderController {
 
     private final OrderRepository orderRepository;
+    private final UserRepository userRepository;
 
-    public OrderController(OrderRepository orderRepository) {
+    public OrderController(OrderRepository orderRepository, UserRepository userRepository) {
         this.orderRepository = orderRepository;
+        this.userRepository = userRepository;
     }
 
-    // Endpoint to get all orders - verify data load
-    @GetMapping
-    public List<Order> getAllOrders() {
-        return orderRepository.findAll();
+    // Get all orders for a specific user (with pagination)
+    @GetMapping("/user/{userId}")
+    public ResponseEntity<?> getOrdersByUser(
+            @PathVariable Integer userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size
+    ) {
+        return userRepository.findById(userId)
+                .map(user -> {
+                    Pageable pageable = PageRequest.of(page, size);
+                    Page<Order> orders = orderRepository.findByUser(user, pageable);
+                    return ResponseEntity.ok(new ApiResponse<>(true, "Orders fetched", orders));
+                })
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(new ApiResponse<>(false, "User not found with id " + userId, null)));
+    }
+
+    // Get specific order details by order id
+    @GetMapping("/{orderId}")
+    public ResponseEntity<?> getOrderById(@PathVariable Integer orderId) {
+        return orderRepository.findById(orderId)
+                .map(order -> ResponseEntity.ok(new ApiResponse<>(true, "Order found", order)))
+                .orElseGet(() -> ResponseEntity.status(HttpStatus.NOT_FOUND)
+                        .body(new ApiResponse<>(false, "Order not found with id " + orderId, null)));
     }
 }
